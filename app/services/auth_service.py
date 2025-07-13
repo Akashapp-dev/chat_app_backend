@@ -1,20 +1,26 @@
-from app.core.security import hash_password, verify_password, create_token
-from app.repositories import user_repo
-from fastapi import HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.future import select
+from app.core.config import settings    
+from app.db.models import User
+from app.schemas.user import UserCreate
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.core.security import hash_password
+from sqlalchemy.future import select
+from app.core.config import settings
+from jose import jwt
 
-async def register_user(db, user_data):
-    existing_user = await user_repo.get_user_by_email(db, user_data.email)
-    if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+async def create_user(user: UserCreate, db: AsyncSession) -> User:
+    db_user = User(email=user.email, hashed_password=hash_password(user.password))
+    db.add(db_user)
+    await db.commit()
+    await db.refresh(db_user)
+    return db_user
 
-    hashed_pw = hash_password(user_data.password)
-    new_user = await user_repo.create_user(db, user_data.email, hashed_pw)
-    return new_user
-
-async def login_user(db, user_data):
-    user = await user_repo.get_user_by_email(db, user_data.email)
-    if not user or not verify_password(user_data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    token = create_token({"sub": user.email})
-    return token, user
+def create_token(email: str) -> str:
+    payload = {
+        "sub": email,
+        "exp": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # or use datetime
+    }
+    token = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return token

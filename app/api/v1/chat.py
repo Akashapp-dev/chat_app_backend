@@ -16,9 +16,12 @@ async def send_msg(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    user_id = getattr(current_user, "id", None)
+    if not isinstance(user_id, int):
+        raise ValueError("Invalid user id")
     return await chat_service.send_message(
         db,
-        sender_id=current_user.id,
+        sender_id=user_id,
         content=message.content
     )
 
